@@ -1,0 +1,57 @@
+
+services:
+  db:
+    image: postgres:17-alpine
+    container_name: postgres_flowmate
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB -h localhost"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  web:
+    build: .
+    container_name: flowmate_web
+    command: uvicorn main:app --host 0.0.0.0 --port 8000
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+    env_file:
+      - .env
+    volumes:
+      - .:/app
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: always
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: flowmate_pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: rupeshrana20274@gmail.com
+      PGADMIN_DEFAULT_PASSWORD: pg_rupesh
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+    ports:
+      - "5050:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: always
+
+volumes:
+  postgres_data:
+  pgadmin_data:
