@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from core.database import engine, Base
 from modules.auth.models import User
-from modules.auth.schemas import UserCreate, UserResponse
+from modules.auth.routes import router as auth_router
 
 app = FastAPI(
     title="FlowMate SaaS API",
@@ -11,6 +11,8 @@ app = FastAPI(
 
 # create all table which is inherit from Base
 Base.metadata.create_all(bind=engine)
+
+app.include_router(auth_router)
 
 @app.get("/")
 def root():

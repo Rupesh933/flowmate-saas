@@ -1,5 +1,6 @@
 
 from pydantic import BaseModel, EmailStr, field_validator
+from uuid import UUID
 
 # BaseModel :- This is the class of pydantic, By inheriting from it, we define the shape of the data.
 # Request Schemas
@@ -18,10 +19,20 @@ class UserCreate(BaseModel):
 
 # Response Schema
 class UserResponse(BaseModel):
-    id: str
+    id: UUID
     name: str
     email: str
     plan: str
 
     class Config:
-        form_attributes = True
+        from_attributes = True
+
+# Login request schema
+class LoginRequest(BaseModel):
+    email: EmailStr
+    password: str
+
+# Token response schema
+class TokenResponse(BaseModel):
+    access_token: str    # long string
+    token_type: str = 'bearer'   # always bearer, because of industry standard, This tell which type of token
