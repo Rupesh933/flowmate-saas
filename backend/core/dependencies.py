@@ -16,15 +16,15 @@ def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
     db: Session = Depends(get_db),
 ) -> User:
-    token = credentials.credentials
-    print("Token credentials: ",token)
+    token = credentials.credentials    # token number
+    print("Token credentials: ",token) 
     try:
         payload = jwt.decode(
             token,
             JWT_SECRET,
             algorithms=[JWT_ALGORITHM ]
             )
-        print("payload (dependencies.py): ",payload)
+        print("payload (dependencies.py): ",payload)   # get sub + exp
 
         user_id: str = payload.get("sub")
         print("user_id: ",user_id)
