@@ -252,3 +252,16 @@ pip install python-jose[cryptography]
     "exp" --> kab expire hoga (30min, 1ghante, 24ghante......)
 2. jwt.encode()  --> ye sab data ko ek lambi encrypted string me convert kar deta hai, JWT_SECRET se sign karta hai
 3. result kuchh aise dikhega  ---> eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJh...
+
+@router.get("/me", response_model=UserResponse)
+def get_my_profile(current_user: User = Depends(get_current_user)):
+    return current_user
+Depends(get_current_user) → Yeh route AB PROTECTED hai!
+
+Agar koi bina token ke aaye → 401 Unauthorized
+Agar valid token ho → current_user mein woh insaan
+                       milega jiska token hai
+
+Yeh /me endpoint sabse common pattern hai SaaS
+apps mein — "mera profile dikhao" (jaise Facebook
+ka "/me" API)

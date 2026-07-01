@@ -1,4 +1,5 @@
 
+from fastapi import Depends
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from passlib.context import CryptContext
@@ -39,7 +40,7 @@ def create_user(db: Session, user_data: UserCreate) -> User:
     db.refresh(new_user)
     return new_user
 
-JWT_SECRET = os.getenv("JWT_SECRET_key")
+JWT_SECRET = os.getenv("JWT_SECRET_key", "default_secret_key_change_me_in_production")
 JWT_ALGORITHM = 'HS256'
 JWT_EXPIRE_MINUTES  = 60 * 24
 
