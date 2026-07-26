@@ -36,3 +36,16 @@ class LoginRequest(BaseModel):
 class TokenResponse(BaseModel):
     access_token: str    # long string
     token_type: str = 'bearer'   # always bearer, because of industry standard, This tell which type of token
+    
+
+class VerifyOTPRequest(BaseModel):
+    email: EmailStr
+    otp: str
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+class ResetPasswordRequest(BaseModel):
+    email: EmailStr
+    otp: str
+    new_password: str

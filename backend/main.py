@@ -28,6 +28,8 @@ from modules.payments.routes import router as payment_router
 import os
 from fastapi.middleware.cors import CORSMiddleware
 
+from core.email_service import send_email
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # startup
@@ -80,6 +82,20 @@ def check_redis():
         return {"redis": "Connected", "value": value}
     except Exception as e:
         return {"redis": "Failed", "error": str(e)}
+
+# Test Email API
+# @app.get("/test-email")
+# def test_email():
+#     result = send_email(
+#         to_email=os.getenv("EMAIL_ADDRESS"),
+#         subject="FlowMate test Email",
+#         body="This is Test email from FlowMate API"
+#     )
+
+#     if result:
+#         return {"message": "Test email sent successfully"}
+#     else:
+#         return {"message": "Email sending failed. Check logs!"}
 
 @app.get("/")
 def root():

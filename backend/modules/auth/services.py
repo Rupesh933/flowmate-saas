@@ -1,7 +1,5 @@
-
-from fastapi import Depends
+from random import random
 from sqlalchemy.orm import Session
-from sqlalchemy.exc import IntegrityError
 from passlib.context import CryptContext
 from fastapi import HTTPException, status
 
@@ -12,75 +10,156 @@ import os
 from jose import jwt
 from datetime import datetime, timedelta, timezone
 
-# make context of Bcrypt - for password hash/verify
+import random
+from core.redis_client import redis_client
+from core.email_service import send_email
+
 pwd_context = CryptContext(schemes=['bcrypt'], deprecated='auto')
 
+
 def create_user(db: Session, user_data: UserCreate) -> User:
-    try:
-        # check email is already exist or not
-        existing_user = db.query(User).filter(User.email == user_data.email).first()
-        print("Existing User ID: ", existing_user)
-        
-        if existing_user:
-            raise HTTPException(
-                status_code = status.HTTP_400_BAD_REQUEST,
-                detail="This email account is already exist"
-            )
-        
-        # hash the password
-        hashed_password = pwd_context.hash(user_data.password)
-        print("Password Value: ", user_data.password)
-        print("Password Length: ", len(user_data.password))
+    existing_user = db.query(User).filter(User.email == user_data.email).first()
 
-        # create object for new user
-        new_user = User(
-            name = user_data.name,
-            email = user_data.email,
-            password_hash = hashed_password
-        )
-
-        # Save the user in DataBase
-        db.add(new_user)
-        db.commit()
-        db.refresh(new_user)
-        return new_user
-    except Exception as e:
-        print(f"User creation failed: {e}")
+    if existing_user:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(e)
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This email account already exists"
         )
 
+    hashed_password = pwd_context.hash(user_data.password)
 
-JWT_SECRET = os.getenv("JWT_SECRET_key", "default_secret_key_change_me_in_production")
+    new_user = User(
+        name=user_data.name,
+        email=user_data.email,
+        password_hash=hashed_password
+    )
+
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+
+    otp = str(random.randint(100000, 999999))
+    redis_client.setex(f"otp:{new_user.email}", 600, otp)
+
+    send_email(
+        to_email=new_user.email,
+        subject="Verify your email account - FlowMate",
+        body=f"Your OTP is: {otp}\nThis OTP expires in 10 minutes."
+    )
+
+    return new_user
+
+
+def verify_email_otp(db: Session, email: str, otp: str): 
+    stored_otp = redis_client.get(f'otp:{email}')
+
+    if not stored_otp:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail='OTP has expired. Please resend OTP'
+        )
+
+    if stored_otp != otp:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid OTP"
+        )
+
+    user = db.query(User).filter(User.email == email).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+
+    user.is_active = True
+    db.commit()
+    db.refresh(user)
+
+    redis_client.delete(f"otp:{email}")
+
+    return user
+
+
+JWT_SECRET = os.getenv("JWT_SECRET")
 JWT_ALGORITHM = 'HS256'
-JWT_EXPIRE_MINUTES  = 60 * 24
+JWT_EXPIRE_MINUTES = 60 * 24
 
-def authenticated_user(
-    db: Session, 
-    login_data: LoginRequest
-) -> User:
-    print("Login Password: ", login_data.password)
-    print("Password Length: ", len(login_data.password))
 
-    # find user by email
+def authenticated_user(db: Session, login_data: LoginRequest) -> User:
     user = db.query(User).filter(User.email == login_data.email).first()
-    print("user email: ",user)
 
-    # Check user does not exist or password is wrong
     if not user or not pwd_context.verify(login_data.password, user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Email or password is wrong"
         )
+
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Please verify your email before logging in"
+        )
+
+
     return user
+
 
 def create_access_token(user_id: str) -> str:
     expire = datetime.now(timezone.utc) + timedelta(minutes=JWT_EXPIRE_MINUTES)
-    
-    payload = {
-        "sub": str(user_id),   # 'sub' --> subject, means whos token is it
-        "exp": expire
-    }
+    payload = {"sub": str(user_id), "exp": expire}
     token = jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
     return token
+
+def forgot_password(db: Session, email: str):
+    user = db.query(User).filter(User.email==email).first()
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+    
+    otp = str(random.randint(100000, 999999))
+    redis_client.setex(f"reset_otp:{email}", 600, otp)
+
+    send_email(
+        to_email=user.email,
+        subject="Reset your password - FlowMate",
+        body=f"Your reset OTP is: {otp}\nThis otp is expire in 10 min."
+    )
+
+    return {"message": "OTP send successfully"}
+
+def reset_password(db: Session, email: str, otp: str, new_password: str):
+    stored_otp = redis_client.get(f'reset_otp:{email}')
+
+    if not stored_otp:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="OTP has expired. Please resend otp"
+        )
+    
+    if stored_otp != otp:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid OTP"
+        )
+    
+    user = db.query(User).filter(User.email==email).first()
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+    
+    hashed_new_password = pwd_context.hash(new_password)
+    user.password_hash = hashed_new_password
+    
+    db.commit()
+    db.refresh(user)
+
+    redis_client.delete(f"reset_otp:{email}")
+
+    return {"message": "Password reset successfully"}

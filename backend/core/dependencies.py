@@ -11,7 +11,7 @@ from core.redis_client import redis_client
 
 security = HTTPBearer()
 
-JWT_SECRET = os.getenv("JWT_SECRET_key", "default_secret_key_change_me_in_production")
+JWT_SECRET = os.getenv("JWT_SECRET", "default_secret_key_change_me_in_production")
 JWT_ALGORITHM  = 'HS256'
 
 def get_current_user(
